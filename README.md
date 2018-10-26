@@ -1,10 +1,6 @@
 # Elgg CMS Pages plugin
 
 
-CMSPages - Static pages
-=======================
-
-
 == What are Static pages ? ==
 - custom pages, similar to Wordpress pages
 - are editable by any admin user (localadmin also in multisite context)
@@ -36,9 +32,9 @@ CMSPages - Static pages
 
 
 
-== INSTRUCTIONS ==
+=== INSTRUCTIONS ===
 
-=== INSTALLATION ===
+== INSTALLATION ==
 - Place in mod directory
 - Enable plugin
 - Go to admin pages
@@ -66,8 +62,6 @@ Note : the cmspage "read" page also allows the content to be embedded elsewhere,
 - replace $pagetype by the the unique string that is at the end of a CMS Page view URL : pg/cmspages/read/[PAGETYPE]
 
 
-
-
 == DEV NOTES ==
 - Admins can allow non-admin users to use that tool (see plugin settings)
 - CMS Pages can be used to generate static pages :
@@ -87,9 +81,7 @@ Note : the cmspage "read" page also allows the content to be embedded elsewhere,
 - In walled-garden, public CMS Pages are made publicly available (if not wanted : change access rights)
 
 
-======================
-Version History
-======================
+=== Versions History ===
 
 @TODO :
   - import export cmspage(s)
@@ -97,8 +89,11 @@ Version History
   - add ids on each cmspage
   - auto adjust editor size to content length
 
+1.12.1 (2018.10.26) - Production version for Elgg 1.12
 
-1.0 (2018.10.26) : final version for Elgg 1.8
+0.9.9.3 RC1 (2015.08.11) - This version is a release candidate
+  - Featured image
+  - Activation and desactivation
 
 0.9.9.2 RC0 (2015.04.01) - This version is a release candidate
   - Integration with elgg_menus (allows to override categories menu with a custom menu)
@@ -137,7 +132,8 @@ Version History
   - per-page css support
 
 0.9.4 (2013.02.21)
-  - correct template debug : filter context should "return" instead of breaking display
+  - little template debug : filter context should "return" instead of breaking display
+
 
 0.9.3 (2012.11.30)
   - removed previous POC and make it an independent plugin (export_embed)
@@ -164,6 +160,9 @@ Version History
 
 0.8 (1.8) (2011.09.25-27):
 	- CMS pages ported to 1.8
+
+== Since now, we'll tell (Elgg version)) ==
+=== CHANGE VERSIONNING FOR 1.8 VERSIONS ===
 
 0.7.3 (2011.09.25):
 	- typo bug + info for using page as a view
@@ -209,5 +208,6 @@ Version History
 
 0.1:
 	- original version by Facyla
+-->
 
 

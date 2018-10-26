@@ -11,7 +11,7 @@
 */
 
 $url = elgg_get_site_url() . 'cmspages';
-$full_url = full_url();
+$full_url = current_page_url();
 
 $access_opt = array(
 	'none' => elgg_echo('cmspages:access_id:none'), 
@@ -83,8 +83,7 @@ if ($cmspages) {
 		//$ent->delete(); // DEBUG/TEST : uncomment and run cmspages menu once to clean delete all cmspages (appears on page reload) - don't forget to comment again !
 	
 		// Useful infos
-		$cmspages_item_class = str_replace(':', '-', $ent->content_type);
-		$cmspages_content .= '<li class="cmspages-item cmspages-item-' . $cmspages_item_class . '" id="cmspages-' . $ent->guid . '">';
+		$cmspages_content .= '<li class="cmspages-item cmspages-item-' . $ent->content_type . '" id="cmspages-' . $ent->guid . '">';
 		
 		// Statut et visibilité
 		//$cmspages_content .= '<span style="float:right;">' . elgg_view('output/access', array('entity' => $ent)) . '</span>';

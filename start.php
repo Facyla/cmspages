@@ -20,13 +20,20 @@ elgg_register_event_handler('pagesetup','system','cmspages_pagesetup');
 function cmspages_init() {
 	elgg_extend_view('css','cmspages/css');
 	elgg_extend_view('css/admin','cmspages/css');
-	if (!elgg_is_active_plugin('adf_public_platform')) { elgg_extend_view('page/elements/head','cmspages/head_extend'); }
+	if (!elgg_is_active_plugin('esope')) { elgg_extend_view('page/elements/head','cmspages/head_extend'); }
 	
-	// Register entity type
-	elgg_register_entity_type('object', 'cmspage');
+	// Register entity type for search
+	if (elgg_get_plugin_setting('register_object', 'cmspages') != 'no') {
+		elgg_register_entity_type('object', 'cmspage');
+		elgg_register_plugin_hook_handler('search', 'object:cmspage', 'cmspages_search_hook');
+	}
 	
 	// Register a URL handler for CMS pages
-	elgg_register_entity_url_handler('object', 'cmspage', 'cmspage_url');
+	// override the default url to view a blog object
+	elgg_register_plugin_hook_handler('entity:url', 'object', 'cmspages_url_handler');
+	
+	// Override icons
+	//elgg_register_plugin_hook_handler("entity:icon:url", "object", "cmspages_icon_hook");
 	
 	// Register main page handler
 	elgg_register_page_handler('cmspages', 'cmspages_page_handler');
@@ -47,6 +54,8 @@ function cmspages_init() {
 	$actions_path = elgg_get_plugins_path() . 'cmspages/actions/cmspages/';
 	elgg_register_action("cmspages/edit", $actions_path . 'edit.php');
 	elgg_register_action("cmspages/delete", $actions_path . 'delete.php');
+	
+	elgg_register_event_handler('upgrade', 'upgrade', 'cmspages_run_upgrades');
 	
 }
 
@@ -118,6 +127,14 @@ function cmspages_page_handler($page) {
 			if (!include($include_path . 'edit.php')) { return false; }
 			break;
 		
+		case 'file':
+			// file/{$entity->guid}/featured_image/$size/
+			if (!empty($page[1])) { set_input('guid', $page[1]); }
+			if (!empty($page[2])) { set_input('metadata', $page[2]); }
+			if (!empty($page[3])) { set_input('size', $page[3]); }
+			if (!include($include_path . 'file.php')) { return false; }
+			break;
+		
 		case 'index':
 			if (!include($include_path . 'index.php')) { return false; }
 			break;
@@ -150,12 +167,51 @@ function cmspages_cms_tag_page_handler($page) {
 }
 
 
-/* Populates the ->getUrl() method for cmspage objects */
-function cmspage_url($cmspage) {
-	//return elgg_get_site_url() . "cmspages/read/" . $cmspage->pagetype;
-	return elgg_get_site_url() . "p/" . $cmspage->pagetype;
+/**
+ * Format and return the URL for cmspage.
+ *
+ * @param string $hook
+ * @param string $type
+ * @param string $url
+ * @param array  $params
+ * @return string URL of blog.
+ */
+function cmspages_url_handler($hook, $type, $url, $params) {
+	$entity = $params['entity'];
+	
+	if (!elgg_instanceof($entity, 'object', 'cmspage')) { return; }
+	
+	return elgg_get_site_url() . "p/" . $entity->pagetype;
 }
 
+// Define object icon : custom or default
+// @TODO : should featured image be used as icon ?
+function cmspages_icon_hook($hook, $entity_type, $returnvalue, $params) {
+	$entity = $params["entity"];
+	$size = $params["size"];
+	if (elgg_instanceof($entity, "object", "cmspage")) {
+		$icon_sizes = elgg_get_config("icon_sizes");
+		if (!isset($icon_sizes[$size])) { $size = 'original'; }
+		if (!empty($entity->featured_image)) {
+			$fh = new ElggFile();
+			$fh->owner_guid = $entity->guid;
+			if ($size != 'original') {
+				$filename = "cmspages/" . $entity->guid . $size . ".jpg";
+				$extension = '.jpg';
+			} else {
+				$filename = $entity->featured_image;
+				$extension = pathinfo($entity->featured_image, PATHINFO_EXTENSION);
+				if (!is_null($extension)) { $extension = ".$extension"; } else { $extension = ''; }
+			}
+			$fh->setFilename($filename);
+			if ($fh->exists()) {
+				return elgg_get_site_url() . "cmspages/file/{$entity->guid}/featured_image/$size/{$entity->pagetype}{$extension}";
+			}
+		}
+		return elgg_get_site_url() . "mod/cmspages/graphics/icons/$size.png";
+	}
+	return $returnvale;
+}
 
 /* Page setup. Adds admin controls */
 function cmspages_pagesetup() {
@@ -498,7 +554,7 @@ function cmspages_compose_module($module_name, $module_config = false) {
 			$type = $module_config['type'];
 			$subtype = $module_config['subtype'];
 			$limit = $module_config['limit'];
-			if (!isset($limit)) $limit = 5;
+			if (!isset($limit)) $limit = 10;
 			$sort = $module_config['sort'];
 			if (!isset($sort)) $sort = "time_created desc";
 			$guids = $module_config['guids'];
@@ -526,6 +582,7 @@ function cmspages_compose_module($module_name, $module_config = false) {
 			if (sizeof($owner_guids) > 0) $params['owner_guids'] = $owner_guids;
 			if (sizeof($container_guids) > 0) $params['container_guids'] = $container_guids;
 			// Get the entities
+			//$ents = elgg_get_entities($params);
 			$ents = elgg_get_entities_from_relationship($params);
 			
 			// Rendu groupe et membre
@@ -598,7 +655,7 @@ function cmspages_compose_module($module_name, $module_config = false) {
 /* Affichage d'une page cms de tout type
  * $params : rendering parameters (which does not depend of page content)
  * $vars : content vars and data to be passed to the views (used by the page)
- *   - 'mode' : view/read (onlmy first level can be in mode 'read')
+ *   - 'mode' : view/read (only first level can be in mode 'read')
  *        Certaines infos sont masquées en mode 'view' (titre, tags...) 
  *        + softfail si accès interdit + aucun impact sur la suite de l'affichage (contextes, etc.)
  *   - 'embed' : can be passed to change some rendering elements based on read embed
@@ -685,7 +742,7 @@ function cmspages_view($cmspage, $params = array(), $vars = array()) {
 	$content = '';
 	// Contexte spécifique
 	elgg_push_context('cmspages');
-	elgg_push_context('cmspages-pagetype-' . $pagetype);
+	elgg_push_context('cmspages:pagetype:' . $pagetype);
 	
 	// Start composing content
 	if (elgg_instanceof($cmspage, 'object', 'cmspage')) {
@@ -781,7 +838,7 @@ function cmspages_view($cmspage, $params = array(), $vars = array()) {
 	}
 	
 	// If asked for "Read more" button, apply it to the whole content (but before the wrapper)
-	if ($read_more && $cmspage) {
+	if ($read_more) {
 		$content = elgg_get_excerpt($content, $read_more);
 		$content .= '<p><a href="' . $cmspage->getURL() . '" class="elgg-button elgg-button-action elgg-button-esope">' . elgg_echo('cmspages:readmore') . '</a></p>';
 	}
@@ -1002,7 +1059,7 @@ function cmspages_get_pages_by_tag($tags) {
 /* Registers an Elgg menu from categories config */
 function cmspages_set_categories_menu() {
 	// List categories - For each entry, add parent if set
-	$tree_categories = elgg_get_plugin_setting('menu_categories');
+	$tree_categories = elgg_get_plugin_setting('menu_categories', 'cmspages');
 	$tree_categories = unserialize($tree_categories);
 	if (is_array($tree_categories)) foreach ($tree_categories as $cat) {
 		$item = new ElggMenuItem($cat['name'], $cat['title'], 'r/'.$cat['name']);
@@ -1024,7 +1081,7 @@ function cmspages_history_list($cmspage, $metadata_name, $limit = false, $offset
 	if (elgg_instanceof($cmspage, 'object', 'cmspage') && !empty($metadata_name)) {
 		if (!$limit) $limit = get_input('limit', 50);
 		if (!$offset) $offset = get_input('offset', 0);
-		$history = $cmspage->getAnnotations('history_' . $metadata_name, $limit, $offset, 'desc');
+		$history = $cmspage->getAnnotations(array('annotation_names' => 'history_' . $metadata_name, 'limit' => $limit, 'offset' => $offset, 'order_by' => 'n_table.time_created desc'));
 		if ($history) {
 			$content .= '<div class="cmspages-history">';
 			$content .= '<strong><a href="javascript:void(0);" onClick="$(\'#cmspages-history-' . $metadata_name . '\').toggle();"><i class="fa fa-toggle-down"></i>' . elgg_echo('cmspages:history') . '</a></strong>';
@@ -1052,5 +1109,170 @@ function cmspages_history_list($cmspage, $metadata_name, $limit = false, $offset
 }
 
 
+// Adds a featured image (only if an image was actually sent)
+function cmspages_add_featured_image($cmspage, $input_name = 'featured_image') {
+	$result = false;
+	if (elgg_instanceof($cmspage, "object", "cmspage")) {
+		//$has_uploaded_icon = (!empty($_FILES['icon']['type']) && substr_count($_FILES['icon']['type'], 'image/'));
+		// Autres dimensions, notamment recadrage pour les vignettes en format carré définies via le thème
+		// Check that there is a file, and that it is an image
+		$is_image = get_resized_image_from_uploaded_file($input_name, 100, 100);
+		if ($is_image) {
+			$prefix = "{$input_name}/" . $cmspage->guid;
+			$fh = new ElggFile();
+			$fh->owner_guid = $cmspage->guid;
+			// Save original image (using original extension)
+			$uploaded_file = get_uploaded_file($input_name);
+			$saved_filename = $prefix . 'original';
+			$extension = pathinfo($_FILES[$input_name]['name'], PATHINFO_EXTENSION);
+			if (!is_null($extension)) { $saved_filename .= ".$extension"; }
+			$fh->setFilename($saved_filename);
+			if($fh->open("write")){
+				$fh->write($uploaded_file);
+				$fh->close();
+			}
+			$path = $fh->getFilenameOnFilestore();
+			// Save different sizes
+			$icon_sizes = elgg_get_config("icon_sizes");
+			foreach($icon_sizes as $icon_name => $icon_info){
+				$icon_file = get_resized_image_from_uploaded_file($input_name, $icon_info["w"], $icon_info["h"], $icon_info["square"], $icon_info["upscale"]);
+				if ($icon_file) {
+					$fh->setFilename($prefix . $icon_name . ".jpg");
+					if ($fh->open("write")) {
+						$fh->write($icon_file);
+						$fh->close();
+					}
+				}
+			}
+			// Keep original file path (extension cannot be guessed)
+			$cmspage->{$input_name} = $saved_filename;
+			$result = true;
+		} else {
+			// Not an image
+		}
+	}
+	return $result;
+}
+
+// Removed featured image
+function cmspages_remove_featured_image(CMSPage $cmspage, $input_name = 'featured_image') {
+	$result = false;
+	if (elgg_instanceof($cmspage, "object", "cmspage")) {
+		if (!empty($cmspage->{$input_name})) {
+			$fh = new ElggFile();
+			$fh->owner_guid = $cmspage->guid;
+			$prefix = "{$input_name}/" . $cmspage->guid;
+			// Remove original image
+			$fh->setFilename($cmspage->{$input_name});
+			if ($fh->exists()) { $fh->delete(); }
+			// Remove custom sizes
+			$icon_sizes = elgg_get_config('icon_sizes');
+			foreach($icon_sizes as $name => $info){
+				$fh->setFilename($prefix . $name . ".jpg");
+				if ($fh->exists()) { $fh->delete(); }
+			}
+			unset($cmspage->{$input_name});
+			$result = true;
+		} else {
+			$result = true;
+		}
+	}
+	return $result;
+}
+
+
+// Avoid dependencies
+if (!elgg_is_active_plugin('esope')) {
+	if (!function_exists('esope_get_input_array')) {
+		function esope_get_input_array($input = false) {
+			if ($input) {
+				// Séparateurs acceptés : retours à la ligne, virgules, points-virgules, pipe, 
+				$input = str_replace(array("\n", "\r", "\t", ",", ";", "|"), "\n", $input);
+				$input = explode("\n", $input);
+				// Suppression des espaces
+				$input = array_map('trim', $input);
+				// Suppression des doublons
+				$input = array_unique($input);
+				// Supression valeurs vides
+				$input = array_filter($input);
+			}
+			return $input;
+		}
+	}
+}
+
+
+function cmspages_run_upgrades($event, $type, $details) {
+	$cmspages_upgrade_version = elgg_get_plugin_setting('upgrade_version', 'cmspages');
+	if (empty($cmspages_upgrade_version)) { $cmspages_upgrade_version = '0'; }
+
+	//if (!$cmspages_upgrade_version != '1.11') {
+	if (version_compare($cmspages_upgrade_version, '1.11') < 0) {
+		 // When upgrading, check if the ElggCMSPage class has been registered as this
+		 // was added in Elgg 1.11
+		if (!update_subtype('object', 'cmspage', 'ElggCMSPage')) {
+			add_subtype('object', 'cmspage', 'ElggCMSPage');
+		}
+		elgg_set_plugin_setting('upgrade_version', '1.11', 'cmspages');
+	}
+	
+	if (version_compare($cmspages_upgrade_version, '1.12') < 0) {
+		// Perform some upgrade tasks...
+		//elgg_set_plugin_setting('upgrade_version', '1.12', 'cmspages');
+	}
+	
+}
+
+
+/**
+ * Get objects that match the search parameters.
+ *
+ * @param string $hook   Hook name
+ * @param string $type   Hook type
+ * @param array  $value  Empty array
+ * @param array  $params Search parameters
+ * @return array
+ */
+// Return matched title
+// @TODO : also perform search on metadata (pagetype)
+function cmspages_search_hook($hook, $type, $value, $params) {
+	$db_prefix = elgg_get_config('dbprefix');
+
+	$join = "JOIN {$db_prefix}objects_entity oe ON e.guid = oe.guid";
+	$params['joins'] = array($join);
+	$fields = array('title', 'description');
+	
+	$where = search_get_where_sql('oe', $fields, $params);
+	
+	$params['wheres'] = array($where);
+	$params['count'] = TRUE;
+	$count = elgg_get_entities($params);
+	
+	// no need to continue if nothing here.
+	if (!$count) {
+		return array('entities' => array(), 'count' => $count);
+	}
+	
+	$params['count'] = FALSE;
+	$params['order_by'] = search_get_order_by_sql('e', 'oe', $params['sort'], $params['order']);
+	$params['preload_owners'] = true;
+	$entities = elgg_get_entities($params);
+
+	// add the volatile data for why these entities have been returned.
+	foreach ($entities as $entity) {
+		$title = search_get_highlighted_relevant_substrings($entity->pagetype, $params['query']);
+		if (empty($title)) { $title = search_get_highlighted_relevant_substrings($entity->pagetitle, $params['query']); }
+		if (empty($title)) { $title = search_get_highlighted_relevant_substrings($entity->title, $params['query']); }
+		$entity->setVolatileData('search_matched_title', $title);
+
+		$desc = search_get_highlighted_relevant_substrings($entity->description, $params['query']);
+		$entity->setVolatileData('search_matched_description', $desc);
+	}
+
+	return array(
+		'entities' => $entities,
+		'count' => $count,
+	);
+}
 
 

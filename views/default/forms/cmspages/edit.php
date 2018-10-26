@@ -5,12 +5,12 @@
  * @package Elggcmspages
  * @license http://www.gnu.org/licenses/old-licenses/gpl-2.0.html GNU Public License version 2
  * @author Facyla
- * @copyright Facyla 2010-2013
+ * @copyright Facyla 2010-2015
  * @link http://id.facyla.net/
  *
 */
 
-$cmspage = $vars['entity']; // we can use directly the entity
+$cmspage = elgg_extract('entity', $vars); // we can use directly the entity
 // or get the page type - used as a user-friendly guid
 // @TODO : this concept could be extend to provide custom URL for any given GUID...
 $pagetype = elgg_get_friendly_title(get_input('pagetype'));
@@ -21,6 +21,27 @@ if (empty($pagetype) && !empty($newpage_title)) { $pagetype = elgg_get_friendly_
 // If entity not set, use the pagetype instead
 if (!$cmspage && $pagetype) { $cmspage = cmspages_get_entity($pagetype); }
 if (!$pagetype && $cmspage) { $pagetype = $cmspage->pagetype; }
+
+
+
+// Advanced editor mode by default for admins only
+$advanced_mode = get_input('edit_mode', '');
+if (!empty($advanced_mode)) {
+	if ($advanced_mode == 'basic') $advanced_mode = false;
+	else $advanced_mode = true;
+} else {
+	//$advanced_mode = elgg_is_admin_logged_in();
+	$advanced_mode = false;
+}
+
+
+$edit_mode_toggle = '<p>' . elgg_echo('cmspages:edit_mode') . '&nbsp;: 
+	<strong class="cmspages-mode-basic">' . elgg_echo('cmspages:edit_mode:basic') . '</strong>
+	<a href="javascript:void(0);" onClick="javascript:cmspages_edit_mode(\'basic\');" class="cmspages-mode-full">' . elgg_echo('cmspages:edit_mode:basic') . '</a>
+	 / 
+	<strong class="cmspages-mode-full">' . elgg_echo('cmspages:edit_mode:full') . '</strong>
+	<a href="javascript:void(0);" onClick="javascript:cmspages_edit_mode(\'full\')" class="cmspages-mode-basic">' . elgg_echo('cmspages:edit_mode:full') . '</a>
+	</p>';
 
 
 // Form selects options_values
@@ -91,6 +112,7 @@ if (elgg_instanceof($cmspage, 'object', 'cmspage')) {
 	$footer = $cmspage->footer; // Use a custom footer ?
 	$css = $cmspage->css;
 	$js = $cmspage->js;
+
 	// Add current access level if it has been set to non-core levels
 	if (!isset($access_opt[$access])) { $access_opt[$access] = get_readable_access_level($access); }
 } else {
@@ -98,6 +120,8 @@ if (elgg_instanceof($cmspage, 'object', 'cmspage')) {
 	$title = $newpage_title; // Set it from pagetype only at creation, never later (would override title)
 	$access = (defined("ACCESS_DEFAULT")) ? ACCESS_DEFAULT : ACCESS_PUBLIC;
 	$newpage_notice = elgg_echo('cmspages:notice:newpage');
+	// Force full edit mode for new content
+	$advanced_mode = true;
 }
 
 
@@ -144,7 +168,33 @@ function cmspages_toggle_display(val) {
 		$(".cmspages-footer").show();
 	}
 }
-</script>';
+
+// Mode switch
+function cmspages_edit_mode(mode) {
+	if (mode == \'basic\') {
+		$(".cmspages-mode-full").addClass(\'hidden\');
+		$(".cmspages-mode-basic").removeClass(\'hidden\');
+	} else if (mode == \'full\') {
+		$(".cmspages-mode-full").removeClass(\'hidden\');
+		$(".cmspages-mode-basic").addClass(\'hidden\');
+	}
+	$("input[name=edit_mode]").val(mode);
+}
+';
+if (!$advanced_mode) {
+	$js_content .= '
+		$(document).ready(function() {
+			cmspages_edit_mode(\'basic\');
+		});
+		';
+} else {
+	$js_content .= '
+		$(document).ready(function() {
+			cmspages_edit_mode(\'full\');
+		});
+		';
+}
+$js_content .= '</script>';
 
 
 // SIDEBAR : information and rendering tools
@@ -153,33 +203,33 @@ function cmspages_toggle_display(val) {
 // This if for a closer integration with externalblog, as a generic edition tool
 //$content_type_input = "Type de contenu : par défaut = HTML avec éditeur, rawhtml = HTML sans éditeur<br />" . elgg_view('input/text', array('name' => 'content_type', 'value' => $content_type)) . '<br />';
 // elgg_view('input/dropdown', array('name' => 'content_type', 'value' => $content_type, 'options_values' => $content_type_opts)) . '</label></p>';
-$type_content = elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:content_type:details'))) . '<p><label>' . elgg_echo('cmspages:content_type') . "&nbsp; ";
+$type_content = '<span class="cmspages-mode-full">' . elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:content_type:details'))) . '<p><label>' . elgg_echo('cmspages:content_type') . "&nbsp; ";
 //$type_content .= '<select onchange="javascript:$(\'.cmspages-field\').hide(); $(\'.cmspages-field.cmspages-field-\'+this.value).show();" name="content_type">';
 $type_content .= '<select onchange="javascript:cmspages_toggle_content_type(this.value);" name="content_type">';
 foreach ($content_type_opts as $val => $text) {
 	if ($val == $content_type) $type_content .= '<option value="' . $val . '" selected="selected">' . $text . '</option>';
 	else $type_content .= '<option value="' . $val . '">' . $text . '</option>';
 }
-$type_content .= '</select></label></p>';
+$type_content .= '</select></label></p></span>';
 // @TODO ? When using templates, allow to define sub-categories : pageshells, wrappers (content templates), blocks (content using templates)
 
 
 // Accès et visibilité
-$pub_content = '<fieldset><legend>' . elgg_echo('cmspages:fieldset:publication') . '</legend>';
+$pub_content = '<fieldset class="cmspages-mode-full"><legend>' . elgg_echo('cmspages:fieldset:publication') . '</legend>';
 	// Accès à la page ou au module
 	$pub_content .= '<p><label>' . elgg_echo('access') . ' ' . elgg_view('input/access', array('name' => 'access_id', 'value' => $access, 'options_values' => $access_opt)) . '</label>';
 	//if ($cmspage) $pub_content .= '<br />' . elgg_echo('cmspages:access:current') . ' : ' . elgg_view('output/access', array('entity' => $cmspage));
 	$pub_content .= '</p>';
 	
 	// Protection par mot de passe
-	$pub_content .= elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:password:details'))) . '<p><label>' . elgg_echo('cmspages:password') . '&nbsp;: ' . elgg_view('input/text', array('name' => 'password', 'value' => $password)) . '</label></p>';
+	$pub_content .= '<span class="cmspages-mode-full">' . elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:password:details'))) . '<p><label>' . elgg_echo('cmspages:password') . '&nbsp;: ' . elgg_view('input/text', array('name' => 'password', 'value' => $password)) . '</label></p></span>';
 	
 	// Contexte d'utilisation : ne s'affiche que si dans ces contextes (ou tous si aucun filtre défini)
-	$pub_content .= elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:contexts:details'))) . '<p><label>' . elgg_echo('cmspages:contexts') . '&nbsp;: ' . elgg_view('input/text', array('name' => 'contexts', 'value' => $contexts)) . '</label></p>';
-$pub_content .= '</fieldset>';
+	$pub_content .= '<span class="cmspages-mode-full">' . elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:contexts:details'))) . '<p><label>' . elgg_echo('cmspages:contexts') . '&nbsp;: ' . elgg_view('input/text', array('name' => 'contexts', 'value' => $contexts)) . '</label></p>';
+$pub_content .= '</fieldset></p>';
 
 
-$cat_content = '<fieldset class="cmspages-categories"><legend>' . elgg_echo('cmspages:fieldset:categories') . '</legend>';
+$cat_content = '<fieldset class="cmspages-categories cmspages-mode-full"><legend>' . elgg_echo('cmspages:fieldset:categories') . '</legend>';
 	// Categories work like a custom menu + tags
 	//$cat_content .= '<p><label>' . elgg_echo('cmspages:categories') . ' ' . elgg_view('input/text', array('name' => 'categories', 'value' => $categories, 'style' => "width:70%;")) . '</label></p>';
 	$cat_content .= '<p>' . elgg_view('input/cmspages_categories', array('name' => 'categories', 'value' => $categories, 'style' => "max-width:50%;")) . '</p>';
@@ -189,7 +239,7 @@ $cat_content .= '</fieldset>';
 
 
 // Options du rendu
-$render_content = '<fieldset><legend>' . elgg_echo('cmspages:fieldset:rendering') . '</legend>';
+$render_content = '<fieldset class="cmspages-mode-full"><legend>' . elgg_echo('cmspages:fieldset:rendering') . '</legend>';
 	// Use custom template for rendering
 	//$render_content .= '<p><label>' . elgg_echo('cmspages:template:use') . '</label> ' . elgg_view('input/text', array('name' => 'template', 'value' => $template, 'style' => "width:200px;")) . '<br /><em>' . elgg_echo('cmspages:template:details') . '</em></p>';
 	$render_content .= elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:template:details'))) . '<p><label>' . elgg_echo('cmspages:template:use') . ' ' . elgg_view('input/dropdown', array('name' => 'template', 'value' => $template, 'options_values' => cmspages_templates_opts())) . '</label>';
@@ -242,14 +292,29 @@ $image_content = '<fieldset class="cmspages-featured-image ' . $hidden . '"><leg
 	// Featured image is linked to the cmspage entity
 	$image_content .= '<p>';
 	if (!empty($featured_image)) {
+		/*
+		elgg_load_js('lightbox');
+		elgg_load_css('lightbox');
 		$image_content .= elgg_view('output/url', array(
-				'text' => elgg_echo('cmspages:featured_image:view'), 'href' => '#cmspage-featured-image',
-				'class' => 'elgg-lightbox', 'style' => 'float:right;',
+				'text' => '<img src="' . elgg_get_site_url() . 'cmspages/file/' . $cmspage->guid . '/featured_image/medium" />', 
+				'title' => elgg_echo('cmspages:featured_image:view'), 
+				'href' => elgg_get_site_url() . 'cmspages/file/' . $cmspage->guid . '/featured_image/original',
+				//'rel' => '#cmspage-featured-image',
+				'class' => 'elgg-lightbox', 'style' => 'float:left; margin-right:1em;',
 			));
-		$image_content .= '<div class="hidden">' . elgg_view_module('aside', elgg_echo('cmspages:featured_image'), '<img src="' . elgg_get_site_url() . 'esope/download_entity_file/' . $cmspage->guid . '/featured_image" style="max-width:100%; max-height:100%; " />', array('id' => 'cmspage-featured-image')) . '</div>';
-		//$image_content .= '<img src="' . elgg_get_site_url() . 'esope/download_entity_file/' . $cmspage->guid . '/featured_image" style="float:right; max-width:30%; max-height:100px; " />';
+		*/
+		$image_content .= elgg_view('output/url', array(
+				'text' => '<img src="' . elgg_get_site_url() . 'cmspages/file/' . $cmspage->guid . '/featured_image/medium" />', 
+				'title' => elgg_echo('cmspages:featured_image:view'), 
+				'href' => elgg_get_site_url() . 'cmspages/file/' . $cmspage->guid . '/featured_image/original',
+				'style' => 'float:left; margin-right:1em;',
+				'target' => "_blank",
+			));
+		// Remove featured image
+		$image_content .= '<p>' . elgg_view("input/checkbox", array('name' => "remove_featured_image", 'value' => "yes")) . '</p>';
+		$image_content .= elgg_echo("cmspages:featured_image:remove");
 	}
-	$image_content .= elgg_view('input/file', array('name' => 'featured_image', 'value' => $featured_image, 'style' => 'width:auto;')) . '</p>';
+	$image_content .= elgg_view('input/file', array('name' => 'featured_image')) . '</p>';
 $image_content .= '</fieldset>';
 
 
@@ -257,7 +322,7 @@ $image_content .= '</fieldset>';
 // CORPS DU FORMULAIRE
 
 // Display more infos and help on chosen content type
-$help_content = '<div class="cmspages-types-tips elgg-output">';
+$help_content = '<div class="cmspages-types-tips elgg-output cmspages-mode-full">';
 	$hide = ($content_type == 'template') ? '' : 'hidden';
 	$help_content .= '<div class="cmspages-field cmspages-field-template ' . $hide . '" >' . elgg_echo('cmspages:content_type:template:details') . '</div>';
 
@@ -276,7 +341,7 @@ $help_content .= '</div>';
 $editor_content = '<fieldset>';
 	$editor_content .= '<legend>' . elgg_echo('cmspages:fieldset:editor') . '</legend>';
 	$hide = ($content_type != 'module') ? '' : 'hidden';
-	$editor_content = '<div class="cmspages-field cmspages-field- cmspages-field-rawhtml cmspages-field-template ' . $hide . '">';
+	$editor_content .= '<div class="cmspages-field cmspages-field- cmspages-field-rawhtml cmspages-field-template ' . $hide . '">';
 		// Contenu du bloc / de la page
 		if (in_array($content_type, array('rawhtml'))) {
 			$editor_content .= '<label for="cmspage_content">' . elgg_echo('cmspages:content:rawhtml') . "</label>" . elgg_view('input/plaintext', array('name' => 'cmspage_content', 'value' => $description));
@@ -312,7 +377,7 @@ $module_content .= '<br />';
 
 
 // JS & CSS
-$jscss_content = '<fieldset>';
+$jscss_content = '<fieldset class="cmspages-mode-full">';
 	$jscss_content .= '<legend>' . elgg_echo('cmspages:fieldset:advanced') . '</legend>';
 	// CSS
 	$jscss_content .= elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:css:details'))) . '<p><label>' . elgg_echo('cmspages:css') . '<br/>' . elgg_view('input/plaintext', array('name' => 'page_css', 'value' => $css)) . '</label>' . '</p>';
@@ -327,7 +392,7 @@ $jscss_content .= '<br />';
 
 // SEO and METATAGS FIELDS
 $hidden = ($display == 'no') ? 'hidden' : '';
-$seo_content = '<fieldset class="cmspages-seo ' . $hidden . '">';
+$seo_content = '<fieldset class="cmspages-seo ' . $hidden . ' cmspages-mode-full">';
 	$seo_content .= '<legend>' . elgg_echo('cmspages:fieldset:seo') . '</legend>';
 	$seo_content .= elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:seo:title:details'))) . '<p><label>' . elgg_echo('cmspages:seo:title') . ' ' . elgg_view('input/text', array('name' => 'seo_title', 'value' => $cmspage->seo_title)) . '</label></p>';
 	$seo_content .= elgg_view('output/cmspage_help', array('content' => elgg_echo('cmspages:seo:description:details'))) . '<p><label>' . elgg_echo('cmspages:seo:description') . ' ' . elgg_view('input/text', array('name' => 'seo_description', 'value' => $cmspage->seo_description)) . '</label></p>';
@@ -339,7 +404,7 @@ $seo_content .= '</fieldset>';
 
 
 // EXPERIMENTAL FIELDS - NON UTILISE
-$rel_content = '<fieldset ' . $hideifmodule . '>';
+$rel_content = '<fieldset ' . $hideifmodule . ' class="cmspages-mode-full">';
 	$rel_content .= '<legend>' . elgg_echo('cmspages:fieldset:unused') . '</legend>';
 	
 	// Bloc conditionnel : masqué si module, affiché si HTML ou template
@@ -394,16 +459,16 @@ if ($cmspage) {
 	
 	// Boutons de suppression et d'enregistrement
 	// Delete link
-	$delete_button = elgg_view('output/confirmlink', array(
+	$delete_button = '<span class="cmspages-mode-full cmspages-delete">' . elgg_view('output/url', array(
 			'href' => elgg_get_site_url() . 'action/cmspages/delete?guid=' . $cmspage->guid,
-			'text' => '<i class="fa fa-trash"></i>' . elgg_echo('cmspages:delete'),
+			'text' => '<i class="fa fa-trash"></i>&nbsp;' . elgg_echo('cmspages:delete'),
 			//'title' => elgg_echo('cmspages:delete:details'),
 			'class' => 'elgg-button elgg-button-action elgg-button-delete',
 			'title' => '',
 			'rel' => '',
 			'style' => 'background-color:#A00;',
 			'confirm' => elgg_echo('cmspages:deletewarning'),
-		));
+		)) . '</span>';
 	// Update submit link
 	$submit_button = elgg_view('input/submit', array('name' => 'submit', 'value' => elgg_echo('cmspages:save')));
 }
@@ -414,35 +479,37 @@ if ($cmspage) {
 $content = '';
 $sidebar = '';
 
+// Menu latéral
 $sidebar .= $pub_content;
 $sidebar .= $cat_content;
 $sidebar .= $render_content;
 $sidebar .= $image_content;
 $sidebar .= $seo_content;
 
+// Colonne principale
 $content .= $js_content;
 $content .= elgg_view('input/hidden', array('name' => 'guid', 'value' => $cmspage_guid));
+$content .= elgg_view('input/hidden', array('name' => 'edit_mode', 'value' => "")) . '</p>';
+$content .= $edit_mode_toggle;
 $content .= '<span style="float:right;">' . $submit_button . '</span>';
+$content .= '<div class="clearfloat"></div>';
 $content .= $type_content;
 $content .= $help_content;
-
 // Titre de la page CMS
-$content .= '<p><label>' . elgg_echo('title') . ' ' . elgg_view('input/text', array('name' => 'cmspage_title', 'value' => $title, 'style' => "width:500px;")) . '</label></p>';
-
+$content .= '<p class=""><label>' . elgg_echo('title') . ' ' . elgg_view('input/text', array('name' => 'cmspage_title', 'value' => $title, 'style' => "width:500px;")) . '</label></p>';
 // Nom du permalien de la page : non éditable (= identifiant de la page)
-$content .= '<p><label for="pagetype">' . elgg_echo('cmspages:pagetype') . '</label><br />' . elgg_get_site_url() . 'p/' . elgg_view('input/text', array('name' => 'pagetype', 'value' => $pagetype, 'style' => "width:40ex;")) . '</p>';
-
+$content .= '<p class="cmspages-mode-full"><label for="pagetype">' . elgg_echo('cmspages:pagetype') . '</label><br />' . elgg_get_site_url() . 'p/' . elgg_view('input/text', array('name' => 'pagetype', 'value' => $pagetype, 'style' => "width:40ex;")) . '</p>';
 $content .= $editor_content;
 $content .= $module_content;
 $content .= $jscss_content;
 $content .= $rel_content;
-$content .= $delete_button;
-$content .= $submit_button;
-
 
 
 // Use a 2 column layout for better readability
 $content = $info_content . '<div style="float:right; width:30%;">' . $sidebar . '</div><div style="float:left; width:66%;">' . $content . '</div><div class="clearfloat"></div>';
+
+$content .= $delete_button;
+$content .= $submit_button;
 
 /* AFFICHAGE DU CONTENU DE LA PAGE */
 // Display the form - Affichage du formulaire

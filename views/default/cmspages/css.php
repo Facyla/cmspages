@@ -15,7 +15,8 @@ pre, code { word-break:break-all; }
 #cmspages-edit-form ul { list-style-type: square; margin-left: 3ex; }
 #cmspages-edit-form input, #cmspages-edit-form select { max-width:100%; }
 #cmspages-edit-form select { max-width:28ex; }
- 
+#cmspages-edit-form .cmspages-delete { float: right; }
+
 #cmspages-form-select { display:inline-block; }
 #cmspages-form-new {  }
 .cmspages-history { padding: 1ex 0 3ex 0; max-height:20ex; overflow:auto; }
@@ -57,6 +58,7 @@ pre, code { word-break:break-all; }
 .cmspages-published { font-weight:bold; color:#0A0; }
 #cmspages-edit-form .cmspages-categories ul, .cmspages-categories ul { list-style-type: none; margin-left: 0; }
 #cmspages-edit-form .cmspages-categories ul ul, .cmspages-categories ul ul { margin-left: 3ex; }
+.cmspages-delete { float: right; }
 
 /* Password protection */
 .cmspage-password-form { display:inline-block; background:transparent; }
