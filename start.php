@@ -14,13 +14,18 @@
 
 // Initialise log browser
 elgg_register_event_handler('init','system','cmspages_init');
-elgg_register_event_handler('pagesetup','system','cmspages_pagesetup');
 
 
 function cmspages_init() {
-	elgg_extend_view('css','cmspages/css');
+	elgg_extend_view('css/elgg','cmspages/css');
 	elgg_extend_view('css/admin','cmspages/css');
 	if (!elgg_is_active_plugin('esope')) { elgg_extend_view('page/elements/head','cmspages/head_extend'); }
+	
+	// Register menus
+	// Topbar menu (admin | editors)
+	elgg_register_plugin_hook_handler('register', 'menu:topbar', 'cmspages_topbar_menu');
+	// Navigation menu
+	elgg_register_plugin_hook_handler('register', 'menu:site', 'cmspages_categories_menu');
 	
 	// Register entity type for search
 	if (elgg_get_plugin_setting('register_object', 'cmspages') != 'no') {
@@ -213,21 +218,29 @@ function cmspages_icon_hook($hook, $entity_type, $returnvalue, $params) {
 	return $returnvale;
 }
 
-/* Page setup. Adds admin controls */
-function cmspages_pagesetup() {
+/* Adds admin menu */
+function cmspages_topbar_menu($hook, $type, $return, $params) {
 	// Facyla: allow main & local admins to use this tool
 	// and also a custom editor list
 	// if ( (elgg_in_context('admin') || elgg_is_admin_logged_in()) || ((elgg_in_context('cmspages_admin')) && in_array($_SESSION['guid'], explode(',', elgg_get_plugin_setting('editors', 'cmspages')))) ) {
 	if (cmspage_is_editor()) {
-		$item = new ElggMenuItem('cmspages', elgg_echo('cmspages'), 'cmspages/');
-		elgg_register_menu_item('topbar', $item);
+		$return[] = new ElggMenuItem('cmspages', elgg_echo('cmspages'), 'cmspages/');
 	}
-	
-	// Init custom CMS menu based on categories
-	cmspages_set_categories_menu();
-	
-	return true;
+	return $return;
 }
+/* Sets custom CMS menu based on categories */
+function cmspages_categories_menu($hook, $type, $return, $params) {
+	// List categories - For each entry, add parent if set
+	$tree_categories = elgg_get_plugin_setting('menu_categories', 'cmspages');
+	$tree_categories = unserialize($tree_categories);
+	if (is_array($tree_categories)) foreach ($tree_categories as $cat) {
+		$item = new ElggMenuItem((string)$cat['name'], (string)$cat['title'], 'r/'.$cat['name']);
+		if (!empty($cat['parent'])) $item->setParentName($cat['parent']);
+		$return[] = $item;
+	}
+	return $return;
+}
+
 
 
 /* ACCESS and PERMISSIONS */
@@ -1055,23 +1068,6 @@ function cmspages_get_pages_by_tag($tags) {
 	return $cmspages;
 }
 
-
-/* Registers an Elgg menu from categories config */
-function cmspages_set_categories_menu() {
-	// List categories - For each entry, add parent if set
-	$tree_categories = elgg_get_plugin_setting('menu_categories', 'cmspages');
-	$tree_categories = unserialize($tree_categories);
-	if (is_array($tree_categories)) foreach ($tree_categories as $cat) {
-		$item = new ElggMenuItem($cat['name'], $cat['title'], 'r/'.$cat['name']);
-		if (!empty($cat['parent'])) $item->setParentName($cat['parent']);
-		// Note : alternative is to pass an array instead of an ElggMenuItem
-		elgg_register_menu_item('cmspages_categories', $item);
-	}
-	// Render menu
-	//elgg_view_menu('cmspages_categories');
-	
-	return true;
-}
 
 
 /* Registers an Elgg menu from categories config */

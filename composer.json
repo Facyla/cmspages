@@ -1,6 +1,6 @@
 {
-	"name": "facyla/elgg/cmspages",
-	"version": "1.12.2",
+	"name": "facyla/cmspages",
+	"version": "2.3.0",
 	"type": "elgg-plugin",
 	"repositories": [
 		{
@@ -11,7 +11,7 @@
 	"require": {
 		"composer/installers": ">=1.0.8"
 	},
-	"description": "CMS Pages or Static pages allow site admins to create an unlimited number of pages, templates and reusable modules.",
+	"description": "CMS Pages or Static pages allow site admins to create an unlimited number of pages, templates, reusable modules and even full website with custom themes based on a single Elgg installation.",
 	"homepage": "https://facyla.fr",
 	"license": "GPL-2.0-only",
 	"authors": [

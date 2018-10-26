@@ -89,6 +89,8 @@ Note : the cmspage "read" page also allows the content to be embedded elsewhere,
   - add ids on each cmspage
   - auto adjust editor size to content length
 
+2.3.0 (2018.10.26) - Update for Elgg 2.3
+
 1.12.1 (2018.10.26) - Production version for Elgg 1.12
 
 0.9.9.3 RC1 (2015.08.11) - This version is a release candidate
